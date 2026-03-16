@@ -1,0 +1,18 @@
+version: '3'
+
+tasks:
+  install-backend:
+    cmds:
+      - cd Backend && python3 -m venv .venv && source .venv/bin/activate && pip install Django && pip freeze > requirements.txt
+
+  dev:
+    cmds:
+      - docker compose -f docker-compose.dev.yml up -d
+
+  up:
+    cmds:
+      - docker compose up --build
+
+  migrate:
+    cmds:
+      - python manage.py migrate
