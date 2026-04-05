@@ -4,7 +4,7 @@
     <facet type="django" name="Django">
       <configuration>
         <option name="rootFolder" value="$MODULE_DIR$/Backend/proj_integrador" />
-        <option name="settingsModule" value="proj_integrador/config/settings.py" />
+        <option name="settingsModule" value="config/settings.py" />
         <option name="manageScript" value="manage.py" />
         <option name="environment" value="&lt;map/&gt;" />
         <option name="doNotUseTestRunner" value="false" />
