@@ -13,6 +13,8 @@ build/
 **venv/
 env/
 ENV/
+uv/
+.venv
 
 # Django
 *.log
@@ -38,3 +40,4 @@ Thumbs.db
 .env
 .env.local
 
+calendar_credentials.json
