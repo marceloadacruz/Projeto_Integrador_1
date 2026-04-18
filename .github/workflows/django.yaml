@@ -31,6 +31,15 @@ jobs:
       run: |
         uv pip install --system -r requirements.txt
 
+    - name: Run Migrations
+      env:
+        SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        VERIFY_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        PYTHONPATH: ${{ github.workspace }}
+      run: |
+        python Backend/proj_integrador/manage.py makemigrations
+        python Backend/proj_integrador/manage.py migrate
+
     - name: Run Tests
       env:
         SECRET_KEY: ${{ secrets.SECRET_KEY }}

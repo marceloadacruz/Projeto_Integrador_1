@@ -1,17 +1,18 @@
+from datetime import datetime, time
+from Agendamento.models import Appointment, Customer
 from .bot.dtos import UsuarioContextoDTO, AgendamentoDTO
+from .bot.utils import opcao_cancelar, opcao_consultar, opcao_agendar, opcao_sair, checar_email, set_state
 from .helper import MensagemBOT, Conversation, conversations
-from .enum import Status, LocalAtendimento
-from .mocks import buscarAgendamentosDisponiveisNoPeriodoMock, checarSeUsuarioExistePorTelefoneMock, buscarAgendamentosPorTelefoneMock
+from .bot_enums import Status, LocalAtendimento
 from .send_message import enviar_mensagem
 
 def processar_mensagem(mensagem_do_usuario: str, bot_telefone: str, usuario_telefone: str, nome_usuario: str):
     conv = get_conversation(usuario_telefone)
 
-    #TODO: substituir mocks por metodos com acesso ao banco
     endereco_padrao: str = "Rua Nelson Tigrão, 15, Vila Missionária, CEP: 04430-165"
 
     if conv.state == Status.IDLE and not conv.data:
-        agendamentos = buscarAgendamentosDisponiveisNoPeriodoMock(20)
+        agendamentos: list[datetime] = Appointment.objects.buscar_agendamentos_disponiveis_no_periodo(20)
         conv.state = Status.INICIAL
         conv.data = {
             "usuario": UsuarioContextoDTO(wa_id=usuario_telefone, nome=nome_usuario),
@@ -19,6 +20,7 @@ def processar_mensagem(mensagem_do_usuario: str, bot_telefone: str, usuario_tele
             "LocalAtendimento": LocalAtendimento.SALAO
         }
 
+    # TODO: ajustar localidade - esqueci de rodar migration
     match conv.state:
         case Status.INICIAL:
             gerenciar_status_inicial(usuario_telefone, bot_telefone)
@@ -28,6 +30,9 @@ def processar_mensagem(mensagem_do_usuario: str, bot_telefone: str, usuario_tele
 
         case Status.SOLICITACAO_PARA_CRIAR_CONTA:
             gerenciar_solicitacao_para_criar_conta(usuario_telefone, bot_telefone, mensagem_do_usuario)
+
+        case Status.SOLICITACAO_PARA_EMAIL:
+            gerenciar_solicitacao_para_email(usuario_telefone, bot_telefone, mensagem_do_usuario)
 
         case Status.AGUARDANDO_OPCAO_MENU:
             gerenciar_menu_principal(usuario_telefone, bot_telefone, mensagem_do_usuario)
@@ -51,7 +56,6 @@ def processar_mensagem(mensagem_do_usuario: str, bot_telefone: str, usuario_tele
             gerenciar_confirmar_cancelamento(usuario_telefone, bot_telefone, mensagem_do_usuario)
 
         case Status.IDLE:
-            enviar_mensagem(usuario_telefone, MensagemBOT.IDLE, bot_telefone)
             gerenciar_menu_principal(usuario_telefone, bot_telefone, mensagem_do_usuario)
 
         case Status.SAIR:
@@ -59,6 +63,14 @@ def processar_mensagem(mensagem_do_usuario: str, bot_telefone: str, usuario_tele
 
 
 def gerenciar_status_inicial(usuario_telefone: str, bot_telefone: str) -> None:
+    usuario = Customer.objects.buscar_usuario_por_telefone(usuario_telefone)
+
+    if usuario:
+        enviar_mensagem(usuario_telefone, MensagemBOT.bem_vindo_customizado(usuario.name), bot_telefone)
+        enviar_mensagem(usuario_telefone, MensagemBOT.MENU_PRINCIPAL, bot_telefone)
+        set_state(usuario_telefone, Status.AGUARDANDO_OPCAO_MENU)
+        return
+
     enviar_mensagem(usuario_telefone, MensagemBOT.BOAS_VINDAS, bot_telefone)
     set_state(usuario_telefone, Status.VALIDANDO_USUARIO)
 
@@ -67,16 +79,21 @@ def gerenciar_validacao_usuario(usuario_telefone: str, bot_telefone: str, mensag
     mensagem = mensagem_do_usuario.strip()
 
     if not mensagem or mensagem.isdigit() or len(mensagem) < 2:
+        set_state(usuario_telefone, Status.VALIDANDO_USUARIO)
         enviar_mensagem(usuario_telefone, MensagemBOT.NOME_NAO_INFORMADO, bot_telefone)
         return
 
     conv = get_conversation(usuario_telefone)
-    conv.data["usuario"].nome = mensagem_do_usuario
+    conv.data["usuario"].nome = mensagem
 
-    usuario_existe: bool = checarSeUsuarioExistePorTelefoneMock(mensagem_do_usuario)
+    usuario_existe: bool = Customer.objects.checar_se_usuario_existe_por_telefone(usuario_telefone)
 
     if usuario_existe:
         enviar_mensagem(usuario_telefone, MensagemBOT.MENU_PRINCIPAL, bot_telefone)
+        usuario: Customer = Customer.objects.buscar_usuario_por_telefone(usuario_telefone)
+        conv.data["usuario"].wa_id = usuario.phone
+        conv.data["usuario"].email = usuario.email
+        conv.data["usuario"].nome = usuario.name
         set_state(usuario_telefone, Status.AGUARDANDO_OPCAO_MENU)
 
     else:
@@ -90,8 +107,8 @@ def gerenciar_solicitacao_para_criar_conta(usuario_telefone: str, bot_telefone: 
         return
 
     if mensagem_do_usuario == "1":
-        enviar_mensagem(usuario_telefone, MensagemBOT.MENU_PRINCIPAL, bot_telefone)
-        set_state(usuario_telefone, Status.AGUARDANDO_OPCAO_MENU)
+        enviar_mensagem(usuario_telefone, MensagemBOT.SOLICITAR_DADOS_CADASTRO, bot_telefone)
+        set_state(usuario_telefone, Status.SOLICITACAO_PARA_EMAIL)
 
     elif mensagem_do_usuario == "2":
         enviar_mensagem(usuario_telefone, MensagemBOT.SAIR, bot_telefone)
@@ -101,6 +118,18 @@ def gerenciar_solicitacao_para_criar_conta(usuario_telefone: str, bot_telefone: 
         enviar_mensagem(usuario_telefone, MensagemBOT.OPCAO_INVALIDA, bot_telefone)
 
 
+def gerenciar_solicitacao_para_email(usuario_telefone: str, bot_telefone: str, mensagem_do_usuario: str) -> None:
+    if not checar_email(mensagem_do_usuario):
+        enviar_mensagem(usuario_telefone, MensagemBOT.EMAIL_INVALIDO, bot_telefone)
+        return
+
+    conv = get_conversation(usuario_telefone)
+    conv.data["usuario"].email = mensagem_do_usuario
+    Customer.objects.cadastrar_usuario(conv.data["usuario"].nome, conv.data["usuario"].email, conv.data["usuario"].wa_id)
+    enviar_mensagem(usuario_telefone, MensagemBOT.MENU_PRINCIPAL, bot_telefone)
+    set_state(usuario_telefone, Status.AGUARDANDO_OPCAO_MENU)
+
+
 def gerenciar_menu_principal(usuario_telefone: str, bot_telefone: str, mensagem_do_usuario: str) -> None:
     if not mensagem_do_usuario.isdigit():
         enviar_mensagem(usuario_telefone, MensagemBOT.OPCAO_INVALIDA, bot_telefone)
@@ -108,43 +137,22 @@ def gerenciar_menu_principal(usuario_telefone: str, bot_telefone: str, mensagem_
 
     conv = get_conversation(usuario_telefone)
 
-    if mensagem_do_usuario == "1": # Agendar
-        agendamentos = conv.data["agendamento"].datas_disponiveis
-        datas_disponiveis = MensagemBOT.informarDatasDisponiveis(agendamentos)
-        enviar_mensagem(usuario_telefone, datas_disponiveis, bot_telefone)
-        set_state(usuario_telefone, Status.DEFININDO_DATA)
+    if mensagem_do_usuario == "1":
+        opcao_agendar(conv, usuario_telefone, bot_telefone, mensagem_do_usuario)
 
-    elif mensagem_do_usuario == "2": # Consultar
-        agendamentos_do_usuario = buscarAgendamentosPorTelefoneMock(mensagem_do_usuario)
+    elif mensagem_do_usuario == "2":
+        opcao_cancelar(conv, usuario_telefone, bot_telefone, mensagem_do_usuario)
 
-        if not agendamentos_do_usuario:
-            enviar_mensagem(usuario_telefone, MensagemBOT.SEM_AGENDAMENTOS, bot_telefone)
-            return
+    elif mensagem_do_usuario == "3":
+        opcao_consultar(usuario_telefone, bot_telefone, mensagem_do_usuario)
 
-        msg = MensagemBOT.selecionar_agendamento(agendamentos_do_usuario)
-        enviar_mensagem(usuario_telefone, msg, bot_telefone)
-
-        conv.data["agendamentos"] = agendamentos_do_usuario
-
-        set_state(usuario_telefone, Status.CANCELAMENTO)
-
-    elif mensagem_do_usuario == "3": # Cancelar
-        agendamentos_do_usuario = buscarAgendamentosPorTelefoneMock(mensagem_do_usuario)
-        enviar_mensagem(usuario_telefone, MensagemBOT.listar_agendamentos(agendamentos_do_usuario), bot_telefone)
-        set_state(usuario_telefone, Status.IDLE)
-
-    elif mensagem_do_usuario == "4": # Sair
-        conv = get_conversation(usuario_telefone)
-
-        conv.data.clear()
-        enviar_mensagem(usuario_telefone,MensagemBOT.SAIR, bot_telefone)
-        set_state(usuario_telefone, Status.IDLE)
+    elif mensagem_do_usuario == "4":
+        opcao_sair(conv, usuario_telefone, bot_telefone)
 
     else:
         enviar_mensagem(usuario_telefone,MensagemBOT.OPCAO_INVALIDA, bot_telefone)
 
 
-#
 def gerenciar_escolha_data(usuario_telefone: str, bot_telefone: str, mensagem_do_usuario: str) -> None:
     mensagem = mensagem_do_usuario.strip()
     conv = get_conversation(usuario_telefone)
@@ -156,8 +164,14 @@ def gerenciar_escolha_data(usuario_telefone: str, bot_telefone: str, mensagem_do
 
     indice = int(mensagem)
 
-    if indice < 0 or indice > len(agendamentos):
+    if indice < 1 or indice > len(agendamentos):
         enviar_mensagem(usuario_telefone, MensagemBOT.OPCAO_INVALIDA, bot_telefone)
+        return
+
+    data_em_uso: bool = Appointment.objects.checar_se_data_esta_em_uso(agendamentos[indice - 1])
+
+    if data_em_uso:
+        enviar_mensagem(usuario_telefone, MensagemBOT.DATA_EM_USO, bot_telefone)
         return
 
     agendamento_escolhido = agendamentos[indice - 1]
@@ -179,22 +193,15 @@ def gerenciar_local_atendimento(usuario_telefone: str, bot_telefone: str, mensag
     conv = get_conversation(usuario_telefone)
 
     if mensagem == "1":
-        conv.data["local_atendimento"] = LocalAtendimento.A_DOMICILIO
         enviar_mensagem(usuario_telefone, MensagemBOT.INFORMAR_ENDERECO, bot_telefone)
         set_state(usuario_telefone, Status.AGUARDANDO_ENDERECO)
 
     elif mensagem == "2":
-        conv.data["local_atendimento"] = LocalAtendimento.SALAO
-        conv.data["endereco"] = endereco_padrao
-        agendamento = conv.data["agendamento"].data_hora
-        nome_usuario = conv.data["usuario"].nome
-
-        msg = MensagemBOT.confirmar_agendamento(nome_usuario, agendamento, endereco_padrao)
-        enviar_mensagem(usuario_telefone, msg, bot_telefone)
-        set_state(usuario_telefone, Status.CONFIRMANDO_AGENDAMENTO)
+        gerenciar_bot_confirmacao_agendamento(usuario_telefone, bot_telefone, endereco_padrao)
 
     else:
         enviar_mensagem(usuario_telefone, MensagemBOT.OPCAO_INVALIDA, bot_telefone)
+
 
 def gerenciar_endereco(usuario_telefone: str, bot_telefone: str, mensagem_do_usuario: str) -> None:
     endereco = mensagem_do_usuario.strip()
@@ -203,17 +210,11 @@ def gerenciar_endereco(usuario_telefone: str, bot_telefone: str, mensagem_do_usu
         enviar_mensagem(usuario_telefone, MensagemBOT.OPCAO_INVALIDA, bot_telefone)
         return
 
-    conv = get_conversation(usuario_telefone)
-    conv.data["endereco"] = endereco
-    agendamento = conv.data["agendamento"].data_hora
-    nome_usuario = conv.data["usuario"].nome
-
-    msg = MensagemBOT.confirmar_agendamento(nome_usuario, agendamento, endereco)
-    enviar_mensagem(usuario_telefone, msg, bot_telefone)
-    set_state(usuario_telefone, Status.CONFIRMANDO_AGENDAMENTO)
+    gerenciar_bot_confirmacao_agendamento(usuario_telefone, bot_telefone, endereco)
 
 
 def gerenciar_confirmacao_agendamento(usuario_telefone: str, bot_telefone: str, mensagem_do_usuario: str) -> None:
+    conv = get_conversation(usuario_telefone)
     mensagem = mensagem_do_usuario.strip()
 
     if not mensagem.isdigit():
@@ -224,13 +225,35 @@ def gerenciar_confirmacao_agendamento(usuario_telefone: str, bot_telefone: str, 
         enviar_mensagem(usuario_telefone, MensagemBOT.AGENDAMENTO_CONFIRMADO, bot_telefone)
         set_state(usuario_telefone, Status.IDLE)
 
+        conv = get_conversation(usuario_telefone)
+        agendamento_dto = conv.data["agendamento"]
+
+        data_escolhida = agendamento_dto.data_hora.get('data') if isinstance(agendamento_dto.data_hora,
+                                                                             dict) else agendamento_dto.data_hora
+        horario_padrao = time(11, 0)
+
+        from datetime import datetime
+        data_hora_final = datetime.combine(data_escolhida, horario_padrao)
+        customer = Customer.objects.buscar_usuario_por_telefone(usuario_telefone)
+        local = conv.data["agendamento"].local_atendimento
+        Appointment.objects.marcar_agendamento(
+            customer,
+            data_hora_final,
+            horario_padrao,
+            local,
+            []
+        )
+
+        set_state(usuario_telefone, Status.IDLE)
+        enviar_mensagem(usuario_telefone, MensagemBOT.IDLE, bot_telefone)
+
     elif mensagem == "2":
         enviar_mensagem(usuario_telefone, MensagemBOT.CANCELAMENTO_CONFIRMADO, bot_telefone)
         set_state(usuario_telefone, Status.IDLE)
+        enviar_mensagem(usuario_telefone, MensagemBOT.IDLE, bot_telefone)
 
     else:
         enviar_mensagem(usuario_telefone,MensagemBOT.OPCAO_INVALIDA, bot_telefone)
-
 
 def gerenciar_cancelamento(usuario_telefone: str, bot_telefone: str, mensagem_do_usuario: str) -> None:
     mensagem = mensagem_do_usuario.strip()
@@ -257,20 +280,25 @@ def gerenciar_cancelamento(usuario_telefone: str, bot_telefone: str, mensagem_do
 
 
 def gerenciar_confirmar_cancelamento(usuario_telefone: str, bot_telefone: str, mensagem_do_usuario: str) -> None:
-    mensagem = mensagem_do_usuario.strip().lower()
+    mensagem = mensagem_do_usuario.strip()
+
+    if not mensagem_do_usuario.isdigit():
+        enviar_mensagem(usuario_telefone, MensagemBOT.OPCAO_INVALIDA, bot_telefone)
+        return
 
     conv = get_conversation(usuario_telefone)
     agendamento = conv.data.get("agendamento_para_cancelar")
 
-    if mensagem == "sim":
-        MensagemBOT.confirmar_cancelamento(agendamento)
+    if mensagem == "1":
         enviar_mensagem(usuario_telefone, MensagemBOT.CANCELAMENTO_CONFIRMADO, bot_telefone)
         set_state(usuario_telefone, Status.IDLE)
-        #TODO: adicionar metodo para cancelar agendamento no banco
+        Appointment.objects.cancelar_agendamento(agendamento)
+        enviar_mensagem(usuario_telefone, MensagemBOT.IDLE, bot_telefone)
 
-    elif mensagem == "não":
+    elif mensagem == "2":
         enviar_mensagem(usuario_telefone, MensagemBOT.CANCELAMENTO_ABORTADO, bot_telefone)
         set_state(usuario_telefone, Status.IDLE)
+        enviar_mensagem(usuario_telefone, MensagemBOT.IDLE, bot_telefone)
 
     else:
         enviar_mensagem(usuario_telefone,MensagemBOT.OPCAO_INVALIDA, bot_telefone)
@@ -278,13 +306,22 @@ def gerenciar_confirmar_cancelamento(usuario_telefone: str, bot_telefone: str, m
 def reset_conversation(phone: str):
     conv = get_conversation(phone)
     conv.data.clear()
+    conv.state = Status.IDLE
+
+
+def gerenciar_bot_confirmacao_agendamento(usuario_telefone: str, bot_telefone: str, endereco_padrao: str):
+    conv = get_conversation(usuario_telefone)
+
+    conv.data["agendamento"].local_atendimento = endereco_padrao
+    agendamento = conv.data["agendamento"].data_hora
+    nome_usuario = conv.data["usuario"].nome
+
+    msg = MensagemBOT.confirmar_agendamento(nome_usuario, agendamento, endereco_padrao)
+    enviar_mensagem(usuario_telefone, msg, bot_telefone)
+    set_state(usuario_telefone, Status.CONFIRMANDO_AGENDAMENTO)
 
 def get_conversation(phone: str) -> Conversation:
     if phone not in conversations:
         conversations[phone] = Conversation()
     return conversations[phone]
 
-
-def set_state(phone: str, new_state: Status):
-    conv = get_conversation(phone)
-    conv.state = new_state

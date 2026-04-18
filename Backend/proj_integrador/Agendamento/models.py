@@ -1,3 +1,5 @@
+from .managers import AppointmentsManager, CustomerManager
+
 from django.db import models
 
 # Create your models here.
@@ -5,9 +7,14 @@ class Customer(models.Model):
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20)
+    deleted = models.BooleanField(default=False)
+
+    objects = CustomerManager()
+    active_objects = models.Manager()
 
     def __str__(self):
         return self.name
+
 
 class Service(models.Model):
     name = models.CharField(max_length=100)
@@ -30,7 +37,10 @@ class Appointment(models.Model):
     time = models.TimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     google_event_id = models.CharField(max_length=255, blank=True, null=True)
-    
+    location = models.CharField(max_length=255, default='Rua Nelson Tigrão, 15, Vila Missionária, CEP: 04430-165')
+
+    objects = AppointmentsManager()
+
     def __str__(self):
         return f"{self.customer.name} - {self.date} às {self.time}"
 
@@ -53,6 +63,9 @@ class Appointment(models.Model):
                 self.google_event_id = id_gerado
                 # Salvamos de novo, mas agora apenas atualizando a coluna do ID do Google
                 super().save(update_fields=['google_event_id'])
+
+        #TODO: adicionar metodo para deletar do google calendar quando for 'cancelado'
+
 
 class AppointmentxService(models.Model):
     appointment = models.ForeignKey(Appointment, on_delete=models.CASCADE)

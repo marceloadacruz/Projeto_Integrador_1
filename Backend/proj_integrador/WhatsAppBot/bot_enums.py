@@ -6,6 +6,8 @@ class Status(str, Enum):
     IDLE = "idle"
     VALIDANDO_USUARIO = "validando_usuario"
     SOLICITACAO_PARA_CRIAR_CONTA = "criando_conta"
+    SOLICITACAO_PARA_EMAIL = "solicitacao_email"
+    AGUARDANDO_EMAIL = "aguardando_email"
     AGUARDANDO_OPCAO_MENU = "aguardando_opcao"
     LOCAL_ATENDIMENTO = "local_atendimento"
     AGUARDANDO_ENDERECO = "aguardando_endereco"

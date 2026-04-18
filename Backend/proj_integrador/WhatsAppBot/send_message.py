@@ -1,8 +1,6 @@
 import os
 import requests
-from http.client import responses
 
-# TODO: ACCESS_TOKEN está vazio
 ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
 
 def enviar_mensagem(usuario_telefone: str, mensagemDoBot: str, bot_telefone: str):
