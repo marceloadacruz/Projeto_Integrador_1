@@ -14,7 +14,7 @@ class MensagemBOT:
     OPCAO_INVALIDA = "Opção inválida. Por favor, escolha uma das opções disponíveis."
     EMAIL_INVALIDO = "Opa, parece que o email informado não é válido, revise e tente novamente!"
     NOME_NAO_INFORMADO = "Opa! Esse nome me parece incorreto, por favor, informe seu nome novamente."
-    LOCAL_ATENDIMENTO = "Em qual local deseja ser atendido(a)?\nDigite um dos valores abaixo:\n\n1 - Em sua residência (preço: R$YYY)\n2 - Em meu salão (preço: R$XXX)"
+    LOCAL_ATENDIMENTO = "Em qual local deseja ser atendido(a)?\nDigite um dos valores abaixo:\n\n1 - Em sua residência (adicional de R$XXX ao valor final)\n2 - Em meu salão"
     AGENDAMENTO_CONFIRMADO = "Agendamento confirmado! ✅\n"
     CANCELAMENTO_CONFIRMADO = "Agendamento cancelado! ❌"
     CANCELAMENTO_ABORTADO = "Cancelamento abortado! ✅"
