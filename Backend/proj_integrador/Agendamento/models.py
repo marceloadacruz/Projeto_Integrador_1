@@ -1,12 +1,15 @@
+from django.contrib.auth.hashers import make_password, check_password
+
 from .managers import AppointmentsManager, CustomerManager
 
 from django.db import models
 
 # Create your models here.
 class Customer(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=99)
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=19)
+    senha = models.CharField(max_length=128, default='temp')
     deleted = models.BooleanField(default=False)
 
     objects = CustomerManager()
@@ -14,6 +17,12 @@ class Customer(models.Model):
 
     def __str__(self):
         return self.name
+
+    def set_password(self, raw_password):
+        self.senha = make_password(raw_password)
+
+    def check_password(self, raw_password):
+        return check_password(raw_password, self.senha)
 
 
 class Service(models.Model):

@@ -1,5 +1,7 @@
 import datetime
 from datetime import datetime, timedelta
+
+from django.contrib.auth.hashers import make_password
 from django.utils import timezone
 from django.db import models
 
@@ -13,12 +15,25 @@ class CustomerManager(models.Manager):
     def checar_se_usuario_existe_por_telefone(self, numero_telefone: str) -> bool:
         return self.filter(phone=numero_telefone).exists()
 
-    def cadastrar_usuario(self, nome: str, email: str, numero_telefone: str) -> 'Customer':
-        return self.create(name=nome, email=email, phone=numero_telefone)
+    def cadastrar_usuario(self, nome: str, email: str, numero_telefone: str, senha: str) -> 'Customer':
+        return self.create(name=nome, email=email, phone=numero_telefone, senha=make_password(senha))
 
     def editar_usuario(self, numero_telefone_atual: str, nome: str | None, email: str | None,
-                       novo_numero_telefone: str | None) -> int:
-        return self.filter(phone=numero_telefone_atual).update(name=nome, email=email, phone=novo_numero_telefone)
+                       novo_numero_telefone: str | None, senha: str | None) -> int:
+        updates = {}
+        if nome is not None:
+            updates['name'] = nome
+        if email is not None:
+            updates['email'] = email
+        if novo_numero_telefone is not None:
+            updates['phone'] = novo_numero_telefone
+        if senha is not None:
+            updates['senha'] = make_password(senha)
+
+        if not updates:
+            return 0
+
+        return self.filter(phone=numero_telefone_atual).update(**updates)
 
     def deletar_usuario(self, numero_telefone: str) -> int:
         linhas_alteradas = self.filter(phone=numero_telefone).update(deleted=True)
@@ -30,6 +45,12 @@ class CustomerManager(models.Manager):
     def buscar_usuarios_nao_deletados(self) -> list['Customer']:
         return list(self.filter(deleted=False))
 
+    def verificar_senha(self, numero_telefone: str, senha: str):
+        usuario = self.buscar_usuario_por_telefone(numero_telefone)
+
+        if usuario:
+            return usuario.check_password(senha)
+        return False
 
 
 
