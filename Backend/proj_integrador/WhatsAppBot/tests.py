@@ -1,8 +1,9 @@
 import uuid
 from unittest.mock import patch, MagicMock
-from datetime import date, timedelta, time as dt_time
+from datetime import date, datetime, timedelta, time as dt_time
 
 from django.test import TestCase
+from django.utils import timezone
 
 from Agendamento.models import Customer, Appointment
 from .engine import processar_mensagem, get_conversation
@@ -110,7 +111,7 @@ class StateMachineIntegrationTest(TestCase):
         appointment = Appointment.objects.filter(customer=self.customer).first()
         self.assertIsNotNone(appointment)
         self.assertEqual(appointment.status, 'scheduled')
-        self.assertEqual(appointment.date, MOCK_DATAS_DISPONIVEIS[0])
+        self.assertEqual(appointment.scheduled_at.date(), MOCK_DATAS_DISPONIVEIS[0])
 
 
 
@@ -179,16 +180,14 @@ class StateMachineIntegrationTest(TestCase):
     def test_cancelar_agendamento_com_sucesso(self, mock_enviar, _mock_enviar_utils):
         app1 = Appointment.objects.create(
             customer=self.customer,
-            date=date.today() + timedelta(days=5),
-            time=dt_time(10, 0),
-            status="scheduled"
+            scheduled_at=timezone.make_aware(datetime.combine(date.today() + timedelta(days=5), dt_time(10, 0))),
+            status="scheduled",
         )
 
         app2 = Appointment.objects.create(
             customer=self.customer,
-            date=date.today() + timedelta(days=6),
-            time=dt_time(14, 0),
-            status="scheduled"
+            scheduled_at=timezone.make_aware(datetime.combine(date.today() + timedelta(days=6), dt_time(14, 0))),
+            status="scheduled",
         )
 
         with patch(PATCH_BUSCAR_DATAS, return_value=MOCK_DATAS_DISPONIVEIS):
@@ -217,7 +216,7 @@ class StateMachineIntegrationTest(TestCase):
         )
 
         app1.refresh_from_db()
-        self.assertEqual(app1.status, 'cancelled')
+        self.assertEqual(app1.status, 'canceled')
 
     @patch(PATCH_ENVIAR_UTILS)
     @patch(PATCH_ENVIAR_ENGINE)
@@ -230,9 +229,8 @@ class StateMachineIntegrationTest(TestCase):
 
         mock_agendamentos = [
             MagicMock(
-                date=date(2026, 4, 5),
-                time="10:00",
-                location="Rua Nelson Tigrão, 15, Vila Missionária, CEP: 04430-165"
+                scheduled_at=datetime(2026, 4, 5, 10, 0),
+                location="Rua Nelson Tigrão, 15, Vila Missionária, CEP: 04430-165",
             )
         ]
 
@@ -265,15 +263,13 @@ class StateMachineIntegrationTest(TestCase):
 
         mock_agendamentos = [
             MagicMock(
-                date=date(2026, 4, 5),
-                time="10:00",
-                location="Rua Nelson Tigrão, 15, Vila Missionária, CEP: 04430-165"
+                scheduled_at=datetime(2026, 4, 5, 10, 0),
+                location="Rua Nelson Tigrão, 15, Vila Missionária, CEP: 04430-165",
             ),
             MagicMock(
-                date=date(2026, 4, 15),
-                time="10:00",
-                location="Rua Nelson Tigrão, 15, Vila Missionária, CEP: 04430-165"
-            )
+                scheduled_at=datetime(2026, 4, 15, 10, 0),
+                location="Rua Nelson Tigrão, 15, Vila Missionária, CEP: 04430-165",
+            ),
         ]
 
         with patch(PATCH_BUSCAR_AGENDAMENTOS, return_value=mock_agendamentos):

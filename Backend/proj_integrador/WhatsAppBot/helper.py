@@ -39,19 +39,28 @@ class MensagemBOT:
     def listar_agendamentos(agendamentos: list[Appointment]) -> str:
         if not agendamentos:
             return MensagemBOT.SEM_AGENDAMENTOS
-        lista = "\n".join(f"{i+1} - {a.date.strftime('%d/%m/%y')} às {a.time} - local: {a.location}" for i, a in enumerate(agendamentos))
+        lista = "\n".join(
+            f"{i+1} - {a.scheduled_at.strftime('%d/%m/%y às %H:%M')} - local: {a.location}"
+            for i, a in enumerate(agendamentos)
+        )
         return f"Seus agendamentos:\n{lista}"
 
     @staticmethod
     def selecionar_agendamento(agendamentos: list[Appointment]) -> str:
         if not agendamentos:
             return MensagemBOT.SEM_AGENDAMENTOS
-        lista = "\n".join(f"{i+1} - {a.date.strftime('%d/%m/%y')} às {a.time} - local: {a.location}" for i, a in enumerate(agendamentos))
+        lista = "\n".join(
+            f"{i+1} - {a.scheduled_at.strftime('%d/%m/%y às %H:%M')} - local: {a.location}"
+            for i, a in enumerate(agendamentos)
+        )
         return f"Qual agendamento deseja cancelar? Selecione um dos valores:\n{lista}"
 
     @staticmethod
     def confirmar_cancelamento(agendamento: Appointment) -> str:
-        return f"Cancelar este agendamento? Digite um dos valores abaixo: \n📅 {agendamento.date.strftime('%d/%m/%y')} às {agendamento.time}\n\n1 - Sim\n2 - Não"
+        return (
+            f"Cancelar este agendamento? Digite um dos valores abaixo: \n"
+            f"📅 {agendamento.scheduled_at.strftime('%d/%m/%y às %H:%M')}\n\n1 - Sim\n2 - Não"
+        )
 
     @staticmethod
     def criar_conta_com_cpf_informado_previamente(cpf: str) -> str:

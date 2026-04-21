@@ -1,54 +1,99 @@
+import logging
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+from django.conf import settings
+from django.utils import timezone
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from django.conf import settings
 
-# 1. Configurações Iniciais
-# Aponta para o arquivo JSON que está na mesma pasta do manage.py
+logger = logging.getLogger(__name__)
+
 CREDENTIALS_FILE = os.path.join(settings.BASE_DIR, 'calendar_credentials.json')
-CALENDAR_ID = 'agendatrancistabot@gmail.com' 
-TEMPO_PROCEDIMENTO = 2                      # Duração fixa de 2 horas para cada procedimento (automatizar isso puxando a duração da tabela Service)
+CALENDAR_ID = 'agendatrancistabot@gmail.com'
+TEMPO_PROCEDIMENTO = 2  # TODO: puxar da tabela Service
+PREFIXO_CANCELADO = '[CANCELADO] '
+COR_CANCELADO = '11'  # Tomato
+
+
+def _build_service():
+    if not os.path.exists(CREDENTIALS_FILE):
+        logger.warning(
+            "calendar_credentials.json não encontrado em %s. Pulei integração com Google Calendar.",
+            CREDENTIALS_FILE,
+        )
+        return None
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            CREDENTIALS_FILE,
+            scopes=['https://www.googleapis.com/auth/calendar'],
+        )
+        return build('calendar', 'v3', credentials=credentials)
+    except Exception:
+        logger.exception("Falha ao inicializar cliente do Google Calendar.")
+        return None
+
 
 def criar_evento_google_calendar(agendamento):
-    """
-    Função que recebe um objeto Appointment do Django e cria um evento no Google.
-    """
-    # 2. Carregando o "crachá" do robô
-    credentials = service_account.Credentials.from_service_account_file(
-        CREDENTIALS_FILE, 
-        scopes=['https://www.googleapis.com/auth/calendar']
-    )
+    """Cria evento no Google Calendar a partir de um Appointment. Retorna o ID do evento ou None."""
+    service = _build_service()
+    if service is None:
+        return None
 
-    # 3. Construindo a ponte de comunicação com a API v3 do Calendar
-    service = build('calendar', 'v3', credentials=credentials)
-
-    # 4. Arrumando as datas (O fuso horário é vital!)
-    # Junta a data e a hora que vieram do banco de dados do Django
-    inicio = datetime.combine(agendamento.date, agendamento.time)
-    
-    # Para esse MVP, vamos fixar a duração do evento em 2 horas. 
+    inicio = agendamento.scheduled_at
     fim = inicio + timedelta(hours=TEMPO_PROCEDIMENTO)
 
-    # 5. Montando o Pacote de Dados (Payload)
     event_data = {
         'summary': f'Trança - {agendamento.customer.name}',
         'description': f'Telefone: {agendamento.customer.phone}\nServiço agendado via Bot.',
-        'start': {
-            'dateTime': inicio.isoformat(),
-            'timeZone': 'America/Sao_Paulo',
-        },
-        'end': {
-            'dateTime': fim.isoformat(),
-            'timeZone': 'America/Sao_Paulo',
-        },
+        'start': {'dateTime': inicio.isoformat(), 'timeZone': settings.TIME_ZONE},
+        'end': {'dateTime': fim.isoformat(), 'timeZone': settings.TIME_ZONE},
     }
 
-    # 6. Enviando a requisição para o Google
     try:
         evento_criado = service.events().insert(calendarId=CALENDAR_ID, body=event_data).execute()
-        print(f"Sucesso! Evento criado com ID: {evento_criado.get('id')}")
+        logger.info("Evento Google Calendar criado com ID: %s", evento_criado.get('id'))
         return evento_criado.get('id')
-    except Exception as e:
-        print(f"Erro Crítico ao criar evento na agenda: {e}")
+    except Exception:
+        logger.exception("Erro ao criar evento no Google Calendar.")
         return None
+
+
+def cancelar_evento_google_calendar(agendamento):
+    """Marca um evento como cancelado: prefixa título, anota data/hora do cancelamento na descrição e pinta em vermelho."""
+    if not agendamento.google_event_id:
+        return False
+
+    service = _build_service()
+    if service is None:
+        return False
+
+    try:
+        evento = service.events().get(calendarId=CALENDAR_ID, eventId=agendamento.google_event_id).execute()
+    except Exception:
+        logger.exception("Erro ao buscar evento %s no Google Calendar.", agendamento.google_event_id)
+        return False
+
+    summary_atual = evento.get('summary', '')
+    if not summary_atual.startswith(PREFIXO_CANCELADO):
+        evento['summary'] = PREFIXO_CANCELADO + summary_atual
+
+    timestamp = timezone.localtime().strftime('%d/%m/%Y %H:%M')
+    linha_cancelamento = f'\n\n❌ Cancelado em {timestamp}'
+    descricao_atual = evento.get('description', '')
+    if linha_cancelamento.strip() not in descricao_atual:
+        evento['description'] = descricao_atual + linha_cancelamento
+
+    evento['colorId'] = COR_CANCELADO
+
+    try:
+        service.events().update(
+            calendarId=CALENDAR_ID,
+            eventId=agendamento.google_event_id,
+            body=evento,
+        ).execute()
+        logger.info("Evento %s marcado como cancelado no Google Calendar.", agendamento.google_event_id)
+        return True
+    except Exception:
+        logger.exception("Erro ao atualizar evento %s como cancelado.", agendamento.google_event_id)
+        return False

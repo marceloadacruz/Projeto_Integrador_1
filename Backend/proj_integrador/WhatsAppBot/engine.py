@@ -20,7 +20,6 @@ def processar_mensagem(mensagem_do_usuario: str, bot_telefone: str, usuario_tele
             "LocalAtendimento": LocalAtendimento.SALAO
         }
 
-    # TODO: ajustar localidade - esqueci de rodar migration
     match conv.state:
         case Status.INICIAL:
             gerenciar_status_inicial(usuario_telefone, bot_telefone)
@@ -233,15 +232,14 @@ def gerenciar_confirmacao_agendamento(usuario_telefone: str, bot_telefone: str, 
         horario_padrao = time(11, 0)
 
         from datetime import datetime
-        data_hora_final = datetime.combine(data_escolhida, horario_padrao)
+        scheduled_at = datetime.combine(data_escolhida, horario_padrao)
         customer = Customer.objects.buscar_usuario_por_telefone(usuario_telefone)
         local = conv.data["agendamento"].local_atendimento
         Appointment.objects.marcar_agendamento(
             customer,
-            data_hora_final,
-            horario_padrao,
+            scheduled_at,
             local,
-            []
+            [],
         )
 
         set_state(usuario_telefone, Status.IDLE)

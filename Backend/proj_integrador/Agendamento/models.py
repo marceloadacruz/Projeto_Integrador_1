@@ -41,39 +41,44 @@ class Appointment(models.Model):
         ('canceled', 'Cancelado'),
     ]
 
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
-    date = models.DateField()
-    time = models.TimeField()
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='appointments')
+    scheduled_at = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     google_event_id = models.CharField(max_length=255, blank=True, null=True)
     location = models.CharField(max_length=255, default='Rua Nelson Tigrão, 15, Vila Missionária, CEP: 04430-165')
 
     objects = AppointmentsManager()
 
+    class Meta:
+        ordering = ['scheduled_at']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__status_original = self.status
+
     def __str__(self):
-        return f"{self.customer.name} - {self.date} às {self.time}"
+        return f"{self.customer.name} - {self.scheduled_at:%d/%m/%Y %H:%M}"
 
     def save(self, *args, **kwargs):
-        # Primeiro, verificamos se o agendamento já existe no banco e se já tem ID do Google
         ja_tem_id_google = bool(self.google_event_id)
-        
-        # Salvamos no SQLite primeiro (garantia de que o dado não se perde)
-        super().save(*args, **kwargs) 
+        status_antigo = self.__status_original
 
-        # Se estiver confirmado e AINDA NÃO foi enviado para o Google...
-        if self.status == 'confirmado' and not ja_tem_id_google:
-            # Importamos a função que acabamos de criar
+        super().save(*args, **kwargs)
+
+        if self.status == 'scheduled' and not ja_tem_id_google:
             from .calendar_utils import criar_evento_google_calendar
-            
-            # Executamos a integração
+
             id_gerado = criar_evento_google_calendar(self)
-            
+
             if id_gerado:
                 self.google_event_id = id_gerado
-                # Salvamos de novo, mas agora apenas atualizando a coluna do ID do Google
                 super().save(update_fields=['google_event_id'])
 
-        #TODO: adicionar metodo para deletar do google calendar quando for 'cancelado'
+        elif self.status == 'canceled' and status_antigo != 'canceled' and self.google_event_id:
+            from .calendar_utils import cancelar_evento_google_calendar
+            cancelar_evento_google_calendar(self)
+
+        self.__status_original = self.status
 
 
 class AppointmentxService(models.Model):
@@ -82,4 +87,4 @@ class AppointmentxService(models.Model):
     applied_price = models.DecimalField(max_digits=8, decimal_places=2)
 
     def __str__(self):
-        return f"{self.appointment.customer.name} - {self.service.name} at {self.appointment.date} {self.appointment.time}"
+        return f"{self.appointment.customer.name} - {self.service.name} at {self.appointment.scheduled_at:%d/%m/%Y %H:%M}"

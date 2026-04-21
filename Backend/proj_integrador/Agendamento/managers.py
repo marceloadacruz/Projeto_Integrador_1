@@ -1,12 +1,9 @@
-import datetime
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 from django.contrib.auth.hashers import make_password
 from django.utils import timezone
 from django.db import models
 
-
-# Define managers ONLY - NO MODEL DEFINITIONS HERE
 
 class CustomerManager(models.Manager):
     def get_queryset(self):
@@ -53,9 +50,10 @@ class CustomerManager(models.Manager):
         return False
 
 
-
 class AppointmentsManager(models.Manager):
-    def buscar_agendamentos_disponiveis_no_periodo(self, total_dias: int = 20) -> list[datetime]:
+    HORARIO_PADRAO = time(11, 0)
+
+    def buscar_agendamentos_disponiveis_no_periodo(self, total_dias: int = 20) -> list:
         hoje = timezone.now().date()
 
         if timezone.now().hour >= 10:
@@ -65,47 +63,47 @@ class AppointmentsManager(models.Manager):
 
         data_final = data_inicio + timedelta(days=total_dias)
 
-        try:
-            dias_ocupados = self.filter(
-                date__range=[data_inicio, data_final],
-            ).values_list('date', flat=True).distinct()
-        except Exception as e:
-            print(f"Erro ao buscar agendamentos: {e}")
-            dias_ocupados = []
+        dias_ocupados = set(
+            self.filter(
+                scheduled_at__date__range=[data_inicio, data_final],
+                status='scheduled',
+            ).values_list('scheduled_at__date', flat=True)
+        )
 
         possiveis_dias = [data_inicio + timedelta(days=i) for i in range(total_dias)]
-        dias_disponiveis = [dia for dia in possiveis_dias if dia not in dias_ocupados]
-        return dias_disponiveis
+        return [dia for dia in possiveis_dias if dia not in dias_ocupados]
 
     def buscar_agendamentos_por_numero_telefone(self, numero_telefone: str) -> list['Appointment']:
         query = self.filter(customer__phone=numero_telefone, status='scheduled')
         return list(query)
 
-    def marcar_agendamento(self, customer: 'Customer', date: datetime, time: datetime.time, location: str,
+    def marcar_agendamento(self, customer: 'Customer', scheduled_at: datetime, location: str,
                            services: list['Service']) -> 'Appointment':
         from .models import AppointmentxService
 
+        if timezone.is_naive(scheduled_at):
+            scheduled_at = timezone.make_aware(scheduled_at, timezone.get_current_timezone())
+
         appointment = self.create(
             customer=customer,
-            date=date,
-            time=time,
+            scheduled_at=scheduled_at,
             status='scheduled',
-            location=location
+            location=location,
         )
 
         for service in services:
             AppointmentxService.objects.create(
                 appointment=appointment,
                 service=service,
-                applied_price=service.price
+                applied_price=service.price,
             )
 
         return appointment
 
     def cancelar_agendamento(self, appointment: 'Appointment') -> 'Appointment':
-        appointment.status = 'cancelled'
+        appointment.status = 'canceled'
         appointment.save(update_fields=['status'])
         return appointment
 
-    def checar_se_data_esta_em_uso(self, data: 'datetime.date') -> bool:
-        return self.filter(date=data, status='scheduled').exists()
+    def checar_se_data_esta_em_uso(self, data) -> bool:
+        return self.filter(scheduled_at__date=data, status='scheduled').exists()
