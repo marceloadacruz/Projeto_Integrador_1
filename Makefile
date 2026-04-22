@@ -16,7 +16,7 @@ RM := rm -rf
 PYTHON_BIN := $(shell command -v python3 || command -v python)
 endif
 
-.PHONY: help setup install venv activate migrate makemigrations runserver createsuperuser test check init-env update-requirements clean
+.PHONY: help setup install venv activate migrate makemigrations runserver createsuperuser ensure-admin test check init-env update-requirements clean
 
 help:
 	@echo ""
@@ -92,10 +92,14 @@ makemigrations:
 	@echo "Criando migrations..."
 	@$(PY) $(MANAGE) makemigrations
 
-runserver:
+ensure-admin:
+	@$(PY) $(MANAGE) ensure_admin
+
+runserver: ensure-admin
 	@echo ""
 	@echo "Iniciando servidor Django..."
 	@echo "   Acesse: http://localhost:8000"
+	@echo "   Admin dev: user=admin / senha=12345"
 	@echo "   Para parar: pressione Ctrl+C"
 	@echo ""
 	@$(PY) $(MANAGE) runserver

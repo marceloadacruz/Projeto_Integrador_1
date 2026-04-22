@@ -26,6 +26,8 @@ Os clientes fazem agendamentos via **bot do WhatsApp**; ao confirmar, o agendame
   - Arquivo `calendar_credentials.json` na pasta `Backend/proj_integrador/` (service account do Google)
   - Token e webhook do WhatsApp Cloud API
 
+> **Windows**: rode os comandos via **Git Bash** ou **WSL**. O Makefile usa bash e não funciona em `cmd.exe` ou PowerShell puros.
+
 ---
 
 ## 🚀 Instalação e Configuração
