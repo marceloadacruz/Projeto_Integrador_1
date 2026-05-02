@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.checks import templates
 from dotenv import load_dotenv
 
 # Build paths inside the config like this: BASE_DIR / 'subdir'.
@@ -34,9 +35,12 @@ CSRF_TRUSTED_ORIGINS = [
     'https://*.localto.net',
 ]
 
+API_BASE_URL = os.getenv('API_BASE_URL', 'http://127.0.0.1:8080')
+
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -46,9 +50,11 @@ INSTALLED_APPS = [
     'Agendamento',
     'WhatsAppBot',
     'Usuario',
+    'servicos'
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -58,12 +64,17 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+CORS_ALLOWED_ORIGINS = [ # for dev
+    "http://127.0.0.1:8080",
+    "http://localhost:8080",
+]
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -124,5 +135,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',  # Project-wide static files
+]
 
 WHATSAPP_VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")

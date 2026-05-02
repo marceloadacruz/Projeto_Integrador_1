@@ -16,7 +16,7 @@ RM := rm -rf
 PYTHON_BIN := $(shell command -v python3 || command -v python)
 endif
 
-.PHONY: help setup install venv activate migrate makemigrations runserver createsuperuser ensure-admin test check init-env update-requirements clean
+.PHONY: help setup install venv activate migrate makemigrations runserver createsuperuser ensure-admin test check init-env update-requirements clean inserir-servicos
 
 help:
 	@echo ""
@@ -45,6 +45,9 @@ help:
 	@echo "  make update-requirements Atualiza requirements.txt com uv"
 	@echo "  make clean              Remove Python isolado e arquivos temporários"
 	@echo ""
+	@echo ""
+	@echo "INSERIR SERVIÇOS:"
+	@echo " make inserir-servicos   Insere o seed de serviços de tranças no banco"
 
 venv:
 	@echo "Preparando Python isolado em '$(VENV)'..."
@@ -67,7 +70,7 @@ init-env:
 		echo "Arquivo .env criado. Ajuste VERIFY_TOKEN com o token do WhatsApp Cloud API."; \
 	fi
 
-setup: install init-env
+setup: install init-env inserir-servicos
 	@echo ""
 	@echo "Configuracao concluida!"
 	@echo ""
@@ -113,6 +116,11 @@ createsuperuser:
 	@echo ""
 	@echo "Conta criada! Acesse em: http://localhost:8000/admin"
 	@echo ""
+
+inserir-servicos:
+	@echo ""
+	@echo "Inserindo seed de serviços no banco..."
+	@$(PY) $(MANAGE) seed_services
 
 test:
 	@echo "Rodando testes..."

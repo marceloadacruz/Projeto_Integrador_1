@@ -10,9 +10,9 @@ def validar_usuario(data) -> bool:
         JsonResponse({ "message": "Erro: Telefone inválido" }, status=400)
         return False
 
-    if not validar_senha(data.get('senha'), data.get('confirmar_senha')):
-        JsonResponse({ "message": "Erro: Senhas não conferem" }, status=400)
-        return False
+    # if not validar_senha(data.get('senha'), data.get('confirmar_senha')):
+    #     JsonResponse({ "message": "Erro: Senhas não conferem" }, status=400)
+    #     return False
 
     return True
 

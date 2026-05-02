@@ -39,6 +39,9 @@ class CustomerManager(models.Manager):
     def buscar_usuario_por_telefone(self, numero_telefone: str) -> 'Customer | None':
         return self.filter(phone=numero_telefone).first()
 
+    def buscar_usuario_por_email(self, email: str) -> 'Customer | None':
+        return self.filter(email=email).first()
+
     def buscar_usuarios_nao_deletados(self) -> list['Customer']:
         return list(self.filter(deleted=False))
 
@@ -48,6 +51,9 @@ class CustomerManager(models.Manager):
         if usuario:
             return usuario.check_password(senha)
         return False
+
+    def buscar_usuario_por_id(self, id: int) -> 'Customer | None':
+        return self.filter(id=id).first()
 
 
 class AppointmentsManager(models.Manager):
@@ -107,3 +113,18 @@ class AppointmentsManager(models.Manager):
 
     def checar_se_data_esta_em_uso(self, data) -> bool:
         return self.filter(scheduled_at__date=data, status='scheduled').exists()
+
+class ServiceManager(models.Manager):
+    def registrar_servicos(self, servicos: list[str]):
+        for servico in servicos:
+            self.get_or_create(
+                name=servico["name"],
+                defaults={
+                    "description": servico["description"],
+                    "price": servico["price"],
+                    "duration": servico["duration"],
+                }
+            )
+
+    def listar_servicos(self) -> list['Service']:
+        return list(self.values_list('name', 'price'))

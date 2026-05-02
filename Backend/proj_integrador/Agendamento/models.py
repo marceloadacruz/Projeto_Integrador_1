@@ -1,7 +1,5 @@
 from django.contrib.auth.hashers import make_password, check_password
-
-from .managers import AppointmentsManager, CustomerManager
-
+from .managers import AppointmentsManager, CustomerManager, ServiceManager
 from django.db import models
 
 # Create your models here.
@@ -30,6 +28,8 @@ class Service(models.Model):
     description = models.TextField()
     price = models.DecimalField(max_digits=8, decimal_places=2)
     duration = models.IntegerField(help_text="Duração em minutos")
+
+    objects = ServiceManager()
 
     def __str__(self):
         return self.name

@@ -1,5 +1,6 @@
 import json
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
@@ -44,9 +45,9 @@ def criar_usuario(request):
     usuario_nome = data['nome']
     usuario_email = data['email']
     usuario_telefone = data['telefone']
-    usuario_senha = data['senha']
+    # usuario_senha = data['senha']
 
-    Customer.objects.cadastrar_usuario(usuario_nome, usuario_email, usuario_telefone, usuario_senha)
+    Customer.objects.cadastrar_usuario(usuario_nome, usuario_email, usuario_telefone, None)
     return JsonResponse({"message": "Sucesso: Usuário criado"}, status=201)
 
 
@@ -73,9 +74,9 @@ def atualizar_usuario(request):
     nome = data.get('nome')
     email = data.get('email')
     novo_telefone = data.get('novo_telefone')
-    senha = data.get('senha')
+    # senha = data.get('senha')
 
-    Customer.objects.editar_usuario(numero_telefone_atual, nome, email, novo_telefone, senha)
+    Customer.objects.editar_usuario(numero_telefone_atual, nome, email, novo_telefone, None)
     return JsonResponse({"message": "Sucesso: Usuário atualizado"}, status=200)
 
 def listar_usuarios():
@@ -110,3 +111,29 @@ def buscar_usuario_por_numero_telefone(request):
             'telefone': usuario.phone,
         })
     return JsonResponse({"error": "Usuário não encontrado"}, status=404)
+
+
+def buscar_usuario_por_email(request):
+    email = request.GET.get('email')
+    if not email:
+        return JsonResponse({'error': 'Email não fornecido'}, status=400)
+
+    try:
+        customer = Customer.objects.get(email=email)
+    except ObjectDoesNotExist:
+        return JsonResponse({'exists': False}, status=404)
+
+    return JsonResponse({
+        'id': customer.id,
+        'nome': customer.name,  # ← match your JS field names
+        'email': customer.email,
+        'telefone': customer.phone,  # ← match your JS field names
+    })
+
+def buscar_usuario_por_id(request):
+    id = request.GET.get('id')
+
+    if not id:
+        return JsonResponse({"error": "Id não informado"}, status=400)
+
+    return Customer.objects.buscar_usuario_por_id(id)
